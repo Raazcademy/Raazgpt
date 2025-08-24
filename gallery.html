@@ -26,3 +26,49 @@
   </footer>
 </body>
 </html>
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>फोटो गैलरी 🖼️</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .gallery {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+        }
+        .gallery img {
+            width: 200px;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 10px;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.3);
+            transition: transform 0.3s;
+        }
+        .gallery img:hover {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>मेरी फोटो गैलरी 🖼️📸</h1>
+    <div class="gallery">
+        <img src="image1.jpg" alt="फोटो 1">
+        <img src="image2.jpg" alt="फोटो 2">
+        <img src="image3.jpg" alt="फोटो 3">
+        <img src="image4.jpg" alt="फोटो 4">
+    </div>
+</body>
+</html>
+
