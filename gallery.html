@@ -1,43 +1,16 @@
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RaazGPT - Gallery</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <header>
-    <h1>RaazGPT Gallery</h1>
-    <nav>
-      <a href="index.html">Home</a>
-      <a href="about.html">About</a>
-      <a href="gallery.html">Gallery</a>
-      <a href="contact.html">Contact</a>
-    </nav>
-  </header>
-  <main>
-    <h2>Gallery</h2>
-    <p>Here we will showcase RaazGPT visuals and resources.</p>
-  </main>
-  <footer>
-    <p>© 2025 RaazGPT. All Rights Reserved.</p>
-  </footer>
-</body>
-</html>
 <!DOCTYPE html>
 <html lang="hi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>फोटो गैलरी 🖼️</title>
+    <title>मेरी Ads-Free फोटो गैलरी 🖼️</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f2f2f2;
-            text-align: center;
+            background-color: #f0f0f0;
+            margin: 0;
             padding: 20px;
+            text-align: center;
         }
         h1 {
             color: #333;
@@ -47,28 +20,79 @@
             flex-wrap: wrap;
             justify-content: center;
             gap: 15px;
+            margin-top: 20px;
         }
         .gallery img {
-            width: 200px;
+            width: 220px;
             height: 150px;
             object-fit: cover;
             border-radius: 10px;
-            box-shadow: 2px 2px 8px rgba(0,0,0,0.3);
-            transition: transform 0.3s;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
         }
         .gallery img:hover {
             transform: scale(1.1);
+            box-shadow: 4px 4px 15px rgba(0,0,0,0.5);
+        }
+        /* Lightbox Styles */
+        #lightbox {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        #lightbox img {
+            max-width: 90%;
+            max-height: 80%;
+            border-radius: 10px;
+        }
+        #lightbox:target {
+            display: flex;
+        }
+        #close-btn {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            color: #fff;
+            font-size: 30px;
+            text-decoration: none;
         }
     </style>
 </head>
 <body>
-    <h1>मेरी फोटो गैलरी 🖼️📸</h1>
+    <h1>मेरी Ads-Free फोटो गैलरी 🖼️📸</h1>
+
     <div class="gallery">
+        <a href="#img1"><img src="image1.jpg" alt="फोटो 1"></a>
+        <a href="#img2"><img src="image2.jpg" alt="फोटो 2"></a>
+        <a href="#img3"><img src="image3.jpg" alt="फोटो 3"></a>
+        <a href="#img4"><img src="image4.jpg" alt="फोटो 4"></a>
+    </div>
+
+    <!-- Lightbox -->
+    <div id="img1" class="lightbox" id="lightbox">
+        <a href="#" id="close-btn">&times;</a>
         <img src="image1.jpg" alt="फोटो 1">
+    </div>
+    <div id="img2" class="lightbox" id="lightbox">
+        <a href="#" id="close-btn">&times;</a>
         <img src="image2.jpg" alt="फोटो 2">
+    </div>
+    <div id="img3" class="lightbox" id="lightbox">
+        <a href="#" id="close-btn">&times;</a>
         <img src="image3.jpg" alt="फोटो 3">
+    </div>
+    <div id="img4" class="lightbox" id="lightbox">
+        <a href="#" id="close-btn">&times;</a>
         <img src="image4.jpg" alt="फोटो 4">
     </div>
+
 </body>
 </html>
-
