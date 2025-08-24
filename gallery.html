@@ -5,22 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>मेरी Ads-Free फोटो गैलरी 🖼️</title>
     <style>
+        /* Body और Header */
         body {
             font-family: Arial, sans-serif;
             background-color: #f0f0f0;
             margin: 0;
-            padding: 20px;
+            padding: 0;
             text-align: center;
         }
-        h1 {
-            color: #333;
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px 20px;
+            background-color: #333;
+            color: #fff;
         }
+
+        header img {
+            width: 60px; /* logo size */
+            height: auto;
+            margin-right: 15px;
+        }
+
+        header h1 {
+            font-size: 24px;
+            margin: 0;
+        }
+
+        /* Gallery Styles */
         .gallery {
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
             gap: 15px;
-            margin-top: 20px;
+            padding: 20px;
         }
         .gallery img {
             width: 220px;
@@ -35,6 +55,7 @@
             transform: scale(1.1);
             box-shadow: 4px 4px 15px rgba(0,0,0,0.5);
         }
+
         /* Lightbox Styles */
         #lightbox {
             position: fixed;
@@ -67,8 +88,14 @@
     </style>
 </head>
 <body>
-    <h1>मेरी Ads-Free फोटो गैलरी 🖼️📸</h1>
 
+    <!-- Header with Logo -->
+    <header>
+        <img src="logo.png" alt="मेरी वेबसाइट Logo">
+        <h1>मेरी Ads-Free फोटो गैलरी 🖼️📸</h1>
+    </header>
+
+    <!-- Gallery Section -->
     <div class="gallery">
         <a href="#img1"><img src="image1.jpg" alt="फोटो 1"></a>
         <a href="#img2"><img src="image2.jpg" alt="फोटो 2"></a>
@@ -77,19 +104,19 @@
     </div>
 
     <!-- Lightbox -->
-    <div id="img1" class="lightbox" id="lightbox">
+    <div id="img1" class="lightbox">
         <a href="#" id="close-btn">&times;</a>
         <img src="image1.jpg" alt="फोटो 1">
     </div>
-    <div id="img2" class="lightbox" id="lightbox">
+    <div id="img2" class="lightbox">
         <a href="#" id="close-btn">&times;</a>
         <img src="image2.jpg" alt="फोटो 2">
     </div>
-    <div id="img3" class="lightbox" id="lightbox">
+    <div id="img3" class="lightbox">
         <a href="#" id="close-btn">&times;</a>
         <img src="image3.jpg" alt="फोटो 3">
     </div>
-    <div id="img4" class="lightbox" id="lightbox">
+    <div id="img4" class="lightbox">
         <a href="#" id="close-btn">&times;</a>
         <img src="image4.jpg" alt="फोटो 4">
     </div>
