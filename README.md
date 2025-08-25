@@ -1,11 +1,11 @@
 
-<img width="600" height="600" alt="ChatGPT Image Aug 25, 2025, 04_30_03 PM" src="https://github.com/user-attachments/assets/05342823-33f1-4713-9483-e5e3aa53c5b5" />
+<img width="700" height="700" alt="ChatGPT Image Aug 25, 2025, 04_30_03 PM" src="https://github.com/user-attachments/assets/05342823-33f1-4713-9483-e5e3aa53c5b5" />
 
 <br/><br/>
 
-# 🏠 Overview
+# 🏠👉 Overview
 
-💬 RaazGPT is the first headless LLM chatbot platform built on top of [Raazgpt]() and [Langchain](https://github.com/hwchase17/langchain). It is boilerplate and a reference implementation of Raazgpt and Telegram utilizing an LLM library like Langchain for indexing, retrieval and context injection.
+💬 🤖RaazGPT is the first headless LLM chatbot platform built on top of [Raazgpt]() and [Langchain](https://github.com/hwchase17/langchain). It is boilerplate and a reference implementation of Raazgpt and Telegram utilizing an LLM library like Langchain for indexing, retrieval and context injection.
 
 <br/>
 
@@ -20,7 +20,7 @@
 
 <br/><br/>
 
-# 💬 What is Raazgpt?
+# 💬 What is 🤖Raazgpt?
 
 In their own words:
 
