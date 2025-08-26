@@ -1537,14 +1537,14 @@ frame.pack(pady=6)
 entry = tk.Entry(frame, font=("Arial", 12), width=60)
 entry.grid(row=0, column=0, padx=6)
 
-send_btn = tk.Button(frame, text="Send", width=8, command=on_send_click)
+send_btn = tk.Button(frame, text="Send", width=10, command=on_send_click)
 send_btn.grid(row=0, column=1, padx=4)
 
-voice_btn = tk.Button(frame, text="🎙️ Voice", width=8, command=on_voice_click)
+voice_btn = tk.Button(frame, text="🎙️ Voice", width=10, command=on_voice_click)
 voice_btn.grid(row=0, column=2, padx=4)
 
 # Welcome
-welcome = "नमस्ते! मैं RaazGPT — Offline GK, Jokes और Songs बॉट. आप मुझसे हिंदी में बात करें। बंद करने के लिए 'बंद करो' बोलिए|"
+welcome = " 🙏नमस्ते! मैं RaazGPT — 📢Offline GK, 🤣Jokes और 🎧🎶Songs बॉट. आप मुझसे हिंदी में बात करें। बंद करने के लिए 'बंद करो,close,quit,keep quite' बोलिए|"
 add_chat_line("🤖: " + welcome)
 if TTS_AVAILABLE:
     threading.Thread(target=lambda: speak(welcome)).start()
@@ -1553,3 +1553,13 @@ root.protocol("WM_DELETE_WINDOW", on_quit)
 
 # ------------------ Start GUI loop ------------------   
 root.mainloop()  
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Hello, यह मेरा पहला Python Web App है!"
+
+if __name__ == "__main__":
+    app.run(debug=True)

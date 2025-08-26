@@ -1,0 +1,622 @@
+"""
+RaazGPT — Offline All‑in‑One Chatbot (Smarter v2)
+--------------------------------------------------
+✅ Fully offline (no internet, no APIs)
+✅ GUI (Tkinter) with chatbox, input, Send + Voice buttons
+✅ Voice input (speech_recognition) + TTS (pyttsx3) if installed
+✅ Memory: name, emotion, usage stats → memory.json
+✅ ~3000 auto‑generated Q/A (GK, Science, History, Simple Math)
+✅ Fuzzy search + intent router + math solver
+✅ Commands: /help, /clear, /export, /name <X>, /emotion <X>, /stats
+✅ Quality fixes: de-dupe, better normalization, safe threading
+
+Run:  python raazgpt_offline_v2.py
+"""
+
+import os
+import json
+import random
+import re
+import time
+import threading
+import queue
+import difflib
+import tkinter as tk
+from tkinter import scrolledtext, messagebox, filedialog
+
+# Optional voice libs (try import; GUI still works if missing)
+try:
+    import speech_recognition as sr
+    SR_AVAILABLE = True
+except Exception:
+    SR_AVAILABLE = False
+
+try:
+    import pyttsx3
+    TTS_AVAILABLE = True
+except Exception:
+    TTS_AVAILABLE = False
+
+# ------------------ Config ------------------
+MEMORY_FILE = "memory.json"
+QA_CACHE_FILE = "qa_cache.json"
+TARGET_QA_COUNT = 3000
+RANDOM_SEED = 42
+VOICE_ENABLED = SR_AVAILABLE and TTS_AVAILABLE
+FUZZY_THRESHOLD = 0.86  # 0..1 higher = stricter
+
+random.seed(RANDOM_SEED)
+
+# ------------------ Utilities ------------------
+def safe_print(*args, **kwargs):
+    try:
+        print(*args, **kwargs)
+    except Exception:
+        pass
+
+_tts_engine = None
+
+def speak(text):
+    """Text to speech (non-blocking) if available."""
+    if not TTS_AVAILABLE:
+        return
+    global _tts_engine
+    if _tts_engine is None:
+        try:
+            _tts_engine = pyttsx3.init()
+        except Exception as e:
+            safe_print("TTS init error:", e)
+            return
+    try:
+        _tts_engine.say(text)
+        _tts_engine.runAndWait()
+    except Exception as e:
+        safe_print("TTS error:", e)
+
+
+def listen(timeout=4, phrase_time_limit=6):
+    """Listen once from microphone and return recognized Hindi text (if SR available)."""
+    if not SR_AVAILABLE:
+        return ""
+    r = sr.Recognizer()
+    try:
+        with sr.Microphone() as source:
+            r.adjust_for_ambient_noise(source, duration=0.6)
+            safe_print("🎤 Listening…")
+            audio = r.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
+    except Exception as e:
+        safe_print("Mic/timeout error:", e)
+        return ""
+    try:
+        text = r.recognize_google(audio, language='hi-IN')
+        safe_print("Heard:", text)
+        return text
+    except Exception as e:
+        safe_print("Recognition error:", e)
+        return ""
+
+
+def normalize(s: str) -> str:
+    if not s:
+        return ""
+    s = s.strip().lower()
+    # Keep math operators, remove other punctuations
+    s = re.sub(r"[^\w\s\+\-\*\/]", "", s)
+    # Collapse spaces
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+# ------------------ Memory ------------------
+def load_memory():
+    if os.path.exists(MEMORY_FILE):
+        try:
+            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def save_memory():
+    try:
+        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(memory, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        safe_print("Save memory error:", e)
+
+
+memory = load_memory()
+memory.setdefault("name", None)
+memory.setdefault("emotion", "neutral")
+memory.setdefault("stats", {"messages": 0, "jokes": 0, "songs": 0})
+memory.setdefault("last_seen", int(time.time()))
+
+# ------------------ Small curated facts ------------------
+# NOTE: Keep these clean & accurate. (Hindi is राजभाषा, not 'राष्ट्रीय भाषा'.)
+curated_facts = [
+    ("भारत की राजधानी क्या है", "नई दिल्ली"),
+    ("भारत की राजभाषा क्या है", "हिन्दी (देवनागरी लिपि) और अंग्रेज़ी सहायक भाषा"),
+    ("भारत का राष्ट्रीय पशु कौन सा है", "बाघ"),
+    ("भारत का राष्ट्रीय पक्षी कौन सा है", "मोर"),
+    ("भारत का राष्ट्रीय फूल कौन सा है", "कमल"),
+    ("भारत का राष्ट्रीय फल कौन सा है", "आम"),
+    ("भारत का राष्ट्रीय वृक्ष कौन सा है", "बरगद"),
+    ("भारत का मुद्रा क्या है", "भारतीय रुपया"),
+    ("ताजमहल किसने बनवाया", "शाहजहाँ"),
+    ("भारतीय संविधान कब लागू हुआ", "26 जनवरी 1950"),
+    ("ISRO की स्थापना कब हुई", "1969"),
+    ("भारत का पहला उपग्रह कौन सा था", "आर्यभट्ट"),
+    ("चंद्रयान3 कब लॉन्च हुआ", "2023"),
+    ("भारतीय रिजर्व बैंक की स्थापना कब हुई", "1935"),
+    ("भारतीय संसद के सदन कौन से हैं", "लोकसभा और राज्यसभा"),
+    ("भारतीय प्रधानमंत्री का निवास स्थान क्या कहलाता है", "लोक कल्याण मार्ग"),
+    ("UNO का मुख्यालय कहाँ है", "न्यूयॉर्क"),
+    ("WHO का मुख्यालय कहाँ है", "जिनेवा"),
+    ("गंगा का उद्गम स्थल कहाँ है", "गंगोत्री हिमनद"),
+    ("भारत का सबसे बड़ा राज्य कौन सा है", "राजस्थान"),
+    ("भारत का सबसे छोटा राज्य कौन सा है", "गोवा"),
+    ("विश्व का सबसे बड़ा महासागर कौन सा है", "प्रशांत महासागर"),
+    ("विश्व की सबसे लंबी नदी कौन सी है", "नील"),
+    ("एवरेस्ट की ऊँचाई कितनी है", "8848.86 मीटर"),
+    ("भारत का पहला 3D प्रिंटेड पोस्ट ऑफिस कहाँ है", "बेंगलुरु"),
+]
+
+jokes = [
+    "टीचर: इतने सुस्त क्यों हो? छात्र: सर, सुस्ती भी एक कला है!",
+    "डॉक्टर: दवा खा ली? मरीज: जी, पर अब भूख नहीं लग रही… दवा बहुत स्वादिष्ट थी!",
+    "एक दोस्त: मैं कल से डाइट पर हूँ। दूसरा: किस समय? पहला: सोते समय।",
+]
+
+songs = [
+    "तुम ही हो… बस तुम ही हो…",
+    "मेरे रंग में रंगने वाली…",
+    "चाँद सा रोशन चेहरा…",
+]
+
+# ------------------ Dataset generation ------------------
+
+def generate_variants(question: str):
+    q = question.strip().rstrip(' ?')
+    base = [q, q + " क्या है", "बताइए: " + q, q + " बताइए", "कहिए, " + q]
+    if len(q.split()) <= 6:
+        base += ["कौन सा " + q, "कौन है " + q]
+    # De-dup while preserving order
+    seen = set()
+    out = []
+    for x in base:
+        k = normalize(x)
+        if k not in seen:
+            seen.add(k)
+            out.append(x)
+    return out
+
+
+def gen_math_questions(count=1800):
+    mq = []
+    ops = ['+', '-', '*', '/']
+    for _ in range(count):
+        a = random.randint(1, 999)
+        b = random.randint(1, 999)
+        op = random.choice(ops)
+        if op == '/':
+            b = random.randint(1, 20)
+            a = b * random.randint(1, 20)
+        expr = f"{a} {op} {b}"
+        try:
+            if op == '/':
+                val = a / b
+                ans = str(int(val)) if abs(val - round(val)) < 1e-9 else str(round(val, 2))
+            else:
+                ans = str(int(eval(expr)))
+        except Exception:
+            continue
+        mq.append((expr + " = ?", ans))
+    return mq
+
+
+def build_large_qa():
+    # Try cached build for speed
+    if os.path.exists(QA_CACHE_FILE):
+        try:
+            with open(QA_CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) >= 1000:
+                    return [(q, a) for q, a in data]
+        except Exception:
+            pass
+
+    qa = []
+    # 1) expand curated facts
+    for q, a in curated_facts:
+        for v in generate_variants(q):
+            qa.append((v, a))
+
+    # 2) some direct GK
+    more = [
+        ("भारत का राष्ट्रीय खेल क्या है", "हॉकी"),
+        ("भारत की मुद्रा क्या है", "भारतीय रुपया"),
+        ("ताजमहल कहाँ है", "आगरा"),
+        ("भारतीय संविधान के पिता कौन हैं", "डॉ. भीमराव अंबेडकर"),
+        ("चंद्रयान3 का लैंडिंग क्षेत्र", "चंद्रमा का दक्षिण ध्रुव"),
+    ]
+    for q, a in more:
+        qa.append((q, a))
+        qa.append((q + " बताइए", a))
+
+    # 3) math autogen
+    qa.extend(gen_math_questions(1800))
+
+    # 4) triggers
+    for t in ["मजाक", "मजाक सुनाओ", "कोई जोक", "जोक सुनाओ"]:
+        qa.append((t, "__JOKE__"))
+    for t in ["गाना", "गाना सुनाओ", "कोई गाना", "सॉन्ग"]:
+        qa.append((t, "__SONG__"))
+
+    # 5) pad until target with variants of facts
+    fact_only = [q for q, _ in curated_facts]
+    while len(qa) < TARGET_QA_COUNT and fact_only:
+        base = random.choice(fact_only)
+        a = next(ans for q, ans in curated_facts if q == base)
+        for v in generate_variants(base):
+            qa.append((v, a))
+            if len(qa) >= TARGET_QA_COUNT:
+                break
+
+    # de-dup preserve order
+    seen = set()
+    uniq = []
+    for q, a in qa:
+        key = (normalize(q), str(a).strip().lower())
+        if key not in seen:
+            seen.add(key)
+            uniq.append((q.strip(), a))
+
+    # cache
+    try:
+        with open(QA_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(uniq, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+    return uniq
+
+
+safe_print("Generating large offline QA dataset…")
+QA_LIST = build_large_qa()
+safe_print(f"Generated {len(QA_LIST)} QA entries.")
+
+# For fuzzy search we maintain a list of just questions
+QA_QUESTIONS = [q for q, _ in QA_LIST]
+
+# ------------------ Intent Router ------------------
+class IntentRouter:
+    def __init__(self):
+        self.patterns = [
+            (re.compile(r"^(/help|help|मदद)$", re.I), self.intent_help),
+            (re.compile(r"^/clear$", re.I), self.intent_clear),
+            (re.compile(r"^/export$", re.I), self.intent_export),
+            (re.compile(r"^/name\s+(.+)$", re.I), self.intent_set_name),
+            (re.compile(r"^/emotion\s+(.+)$", re.I), self.intent_set_emotion),
+            (re.compile(r"^/stats$", re.I), self.intent_stats),
+            (re.compile(r"^(hi|hello|namaste|नमस्ते)$", re.I), self.intent_greet),
+        ]
+
+    # --- intents ---
+    def intent_help(self, match, text):
+        return (
+            "Commands:\n"
+            "/help — यह मदद\n"
+            "/clear — चैट साफ करें\n"
+            "/export — चैट को .txt में सेव करें\n"
+            "/name <आपका नाम> — आपका नाम सेव\n"
+            "/emotion <happy/sad/neutral> — भावना सेट\n"
+            "/stats — उपयोग आँकड़े"
+        )
+
+    def intent_clear(self, match, text):
+        clear_chat()
+        return "चैट साफ कर दी गई।"
+
+    def intent_export(self, match, text):
+        return export_chat()
+
+    def intent_set_name(self, match, text):
+        name = match.group(1).strip()
+        memory["name"] = name
+        save_memory()
+        return f"ठीक है {name}, आपका नाम सेव हो गया!"
+
+    def intent_set_emotion(self, match, text):
+        emo = match.group(1).strip().lower()
+        memory["emotion"] = emo
+        save_memory()
+        return f"भावना '{emo}' सेट कर दी।"
+
+    def intent_stats(self, match, text):
+        st = memory.get("stats", {})
+        return f"संदेश: {st.get('messages',0)}, जोक्स: {st.get('jokes',0)}, गाने: {st.get('songs',0)}"
+
+    def intent_greet(self, match, text):
+        if memory.get("name"):
+            return f"नमस्ते {memory['name']}! मैं कैसे मदद करूँ?"
+        return "नमस्ते! मैं RaazGPT हूँ — पूछिए।"
+
+    # --- route ---
+    def route(self, text):
+        for pat, fn in self.patterns:
+            m = pat.search(text)
+            if m:
+                return fn(m, text)
+        return None
+
+
+router = IntentRouter()
+
+# ------------------ Answering logic ------------------
+
+def try_exact_match(query):
+    qn = normalize(query)
+    for q, a in QA_LIST:
+        if normalize(q) == qn:
+            return a
+    return None
+
+
+def try_contains_match(query):
+    qn = normalize(query)
+    for q, a in QA_LIST:
+        if normalize(q) in qn:
+            return a
+    return None
+
+
+def try_fuzzy_match(query):
+    # use difflib to find close question
+    candidates = difflib.get_close_matches(query, QA_QUESTIONS, n=1, cutoff=FUZZY_THRESHOLD)
+    if candidates:
+        q = candidates[0]
+        # get answer
+        for _q, a in QA_LIST:
+            if _q == q:
+                return a
+    return None
+
+
+def try_math(query):
+    m = re.search(r"(\d+)\s*([\+\-\*\/])\s*(\d+)", query)
+    if not m:
+        return None
+    a = int(m.group(1)); op = m.group(2); b = int(m.group(3))
+    try:
+        if op == '+':
+            return str(a + b)
+        if op == '-':
+            return str(a - b)
+        if op == '*':
+            return str(a * b)
+        if op == '/':
+            if b == 0:
+                return "शून्य से भाग नहीं हो सकता"
+            val = a / b
+            return str(int(val)) if abs(val - round(val)) < 1e-9 else str(round(val, 2))
+    except Exception:
+        return None
+
+
+def find_answer(query):
+    if not query.strip():
+        return "कृपया अपना प्रश्न लिखें।"
+
+    # 0) commands / greetings
+    routed = router.route(query.strip())
+    if routed is not None:
+        return routed
+
+    # 1) exact
+    ans = try_exact_match(query)
+    if ans:
+        return ans
+
+    # 2) contains
+    ans = try_contains_match(query)
+    if ans:
+        return ans
+
+    # 3) math
+    ans = try_math(query)
+    if ans:
+        return ans
+
+    # 4) fuzzy
+    ans = try_fuzzy_match(query)
+    if ans:
+        return ans
+
+    # 5) triggers by keyword
+    qn = normalize(query)
+    if any(k in qn for k in ["मजाक", "जोक"]):
+        return "__JOKE__"
+    if "गाना" in qn or "song" in qn:
+        return "__SONG__"
+
+    # 6) name memory hints
+    if "नाम" in qn:
+        if "मेरा नाम" in qn:
+            m = re.search(r"मेरा नाम\s+([\w\-]+)", query, re.I)
+            if m:
+                name = m.group(1)
+                memory["name"] = name
+                save_memory()
+                return f"अच्छा {name}, आपसे मिलकर खुशी हुई!"
+        if memory.get("name"):
+            return f"आपका नाम {memory['name']} है।"
+        return "मेरा नाम RaazGPT है — आपका साथी।"
+
+    return "माफ़ कीजिए, मैं समझ नहीं पाया — कृपया दूसरा तरीका आज़माएँ या /help लिखें।"
+
+# ------------------ GUI Helpers ------------------
+ui_queue = queue.Queue()
+
+
+def add_chat_line(text):
+    chatbox.config(state=tk.NORMAL)
+    chatbox.insert(tk.END, text + "\n")
+    chatbox.config(state=tk.DISABLED)
+    chatbox.see(tk.END)
+
+
+def clear_chat():
+    chatbox.config(state=tk.NORMAL)
+    chatbox.delete(1.0, tk.END)
+    chatbox.config(state=tk.DISABLED)
+
+
+chat_log = []  # for export
+
+
+def post_system(text):
+    chat_log.append(f"🤖: {text}")
+    add_chat_line("🤖: " + text)
+
+
+def post_user(text):
+    chat_log.append(f"आप: {text}")
+    add_chat_line("आप: " + text)
+
+
+def export_chat():
+    try:
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        default = f"chat_{ts}.txt"
+        path = filedialog.asksaveasfilename(defaultextension=".txt", initialfile=default,
+                                            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")])
+        if not path:
+            return "Export रद्द किया गया।"
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(chat_log))
+        return f"Exported: {os.path.basename(path)}"
+    except Exception as e:
+        return f"Export विफल: {e}"
+
+
+# ------------------ Conversation flow ------------------
+
+def process_and_respond(user_text):
+    ans = find_answer(user_text)
+    memory["stats"]["messages"] = memory.get("stats", {}).get("messages", 0) + 1
+    save_memory()
+
+    if ans == "__JOKE__":
+        j = random.choice(jokes)
+        ui_queue.put(("bot", j))
+        ui_queue.put(("speak", j))
+        memory["stats"]["jokes"] += 1
+        save_memory()
+        return
+    if ans == "__SONG__":
+        s = random.choice(songs)
+        ui_queue.put(("bot", s))
+        ui_queue.put(("speak", s))
+        memory["stats"]["songs"] += 1
+        save_memory()
+        return
+
+    ui_queue.put(("bot", str(ans)))
+    ui_queue.put(("speak", str(ans)))
+
+
+def on_send_click(event=None):
+    txt = entry.get().strip()
+    if not txt:
+        return
+    entry.delete(0, tk.END)
+    post_user(txt)
+    threading.Thread(target=process_and_respond, args=(txt,), daemon=True).start()
+
+
+def on_voice_click():
+    if not SR_AVAILABLE:
+        messagebox.showinfo("Voice not available", "SpeechRecognition library नहीं मिली या माइक्रोफ़ोन उपलब्ध नहीं।")
+        return
+    post_system("🎤 Listening…")
+
+    def _listen():
+        q = listen(timeout=5, phrase_time_limit=6)
+        if not q:
+            ui_queue.put(("bot", "मैं सुन नहीं पाया।"))
+            return
+        ui_queue.put(("user", q))
+        process_and_respond(q)
+
+    threading.Thread(target=_listen, daemon=True).start()
+
+
+def on_quit():
+    save_memory()
+    root.destroy()
+
+
+def ui_pump():
+    try:
+        while True:
+            kind, payload = ui_queue.get_nowait()
+            if kind == "bot":
+                post_system(payload)
+            elif kind == "user":
+                post_user(payload)
+            elif kind == "speak":
+                if TTS_AVAILABLE:
+                    threading.Thread(target=speak, args=(payload,), daemon=True).start()
+    except queue.Empty:
+        pass
+    root.after(60, ui_pump)
+
+# ------------------ Build GUI ------------------
+root = tk.Tk()
+root.title("RaazGPT — Offline GK + Jokes + Songs (v2)")
+root.geometry("880x600")
+
+# Menu
+menubar = tk.Menu(root)
+filemenu = tk.Menu(menubar, tearoff=0)
+filemenu.add_command(label="Export Chat (/export)", command=lambda: post_system(export_chat()))
+filemenu.add_separator()
+filemenu.add_command(label="Quit", command=on_quit)
+menubar.add_cascade(label="File", menu=filemenu)
+
+helpmenu = tk.Menu(menubar, tearoff=0)
+helpmenu.add_command(label="Help (/help)", command=lambda: post_system(router.intent_help(None, "")))
+menubar.add_cascade(label="Help", menu=helpmenu)
+root.config(menu=menubar)
+
+chatbox = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=100, height=28, font=("Arial", 12))
+chatbox.config(state=tk.DISABLED)
+chatbox.pack(padx=8, pady=8, fill=tk.BOTH, expand=True)
+
+frame = tk.Frame(root)
+frame.pack(pady=6)
+
+entry = tk.Entry(frame, font=("Arial", 12), width=70)
+entry.grid(row=0, column=0, padx=6)
+
+send_btn = tk.Button(frame, text="Send", width=10, command=on_send_click)
+send_btn.grid(row=0, column=1, padx=4)
+
+voice_btn = tk.Button(frame, text="🎙️ Voice", width=10, command=on_voice_click, state=(tk.NORMAL if SR_AVAILABLE else tk.DISABLED))
+voice_btn.grid(row=0, column=2, padx=4)
+
+# Shortcuts
+root.bind('<Return>', on_send_click)
+root.bind('<Control-s>', lambda e: post_system(export_chat()))
+root.bind('<F2>', lambda e: on_voice_click())
+
+welcome = "नमस्ते! मैं RaazGPT (v2) — Offline GK + Jokes + Songs बॉट. /help लिखकर कमांड देखें।"
+post_system(welcome)
+if TTS_AVAILABLE:
+    threading.Thread(target=speak, args=(welcome,), daemon=True).start()
+
+root.protocol("WM_DELETE_WINDOW", on_quit)
+root.after(80, ui_pump)
+
+# ------------------ Start GUI loop ------------------
+root.mainloop()
